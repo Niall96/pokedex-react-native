@@ -1,98 +1,72 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback } from "react";
 import {
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
-const FAVORITES_KEY = "@pokedex_favorites";
+import { useFavorites } from "../context/FavoritesContext";
 
 export default function Favorites() {
   const router = useRouter();
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [pokemon, setPokemon] = useState<any[]>([]);
-
-  const loadAndFetchFavorites = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(FAVORITES_KEY);
-      let favoriteIds: string[] = [];
-
-      if (stored) {
-        favoriteIds = JSON.parse(stored);
-      }
-
-      setFavorites(favoriteIds);
-
-      if (favoriteIds.length === 0) {
-        setPokemon([]);
-        return;
-      }
-
-      const pokemonPromises = favoriteIds.map((id) =>
-        fetch(`https://pokeapi.co/api/v2/pokemon/${id}`)
-          .then((res) => res.json())
-          .then((data) => ({
-            id: data.id.toString(),
-            name: data.name,
-            url: `https://pokeapi.co/api/v2/pokemon/${id}/`,
-          }))
-          .catch((error) => {
-            console.error(`Error fetching Pokemon ${id}:`, error);
-            return null;
-          })
-      );
-
-      const results = await Promise.all(pokemonPromises);
-      setPokemon(results.filter((p) => p !== null));
-    } catch (error) {
-      console.error("Error loading favorites:", error);
-      setPokemon([]);
-    }
-  }, []);
+  const { favorites, loadFavorites, removeFavorite } = useFavorites();
 
   useFocusEffect(
     useCallback(() => {
-      loadAndFetchFavorites();
-    }, [loadAndFetchFavorites])
+      loadFavorites();
+    }, [loadFavorites])
   );
+
+  const handleRemove = async (id: string, e: any) => {
+    e.stopPropagation();
+    await removeFavorite(id);
+  };
 
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Favorites</Text>
-          {pokemon.length > 0 && (
-            <Text style={styles.headerCount}>{pokemon.length} Pokémon</Text>
+          {favorites.length > 0 && (
+            <Text style={styles.headerCount}>{favorites.length} Pokémon</Text>
           )}
         </View>
       </View>
 
-      {pokemon.length === 0 ? (
+      {favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No favorites yet</Text>
-          <Text style={styles.emptySubtext}>
-            Add Pokémon to your favorites to see them here
-          </Text>
         </View>
       ) : (
         <FlatList
-          data={pokemon}
+          data={favorites}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
           renderItem={({ item }) => {
             return (
               <TouchableOpacity
                 onPress={() => router.push(`/pokemon/${item.id}`)}
-                style={styles.pokemonItem}
+                style={styles.pokemonCard}
+                activeOpacity={0.7}
               >
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.pokemonImage}
+                />
                 <Text style={styles.pokemonName}>
                   {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
                 </Text>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={(e) => handleRemove(item.id, e)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           }}
@@ -139,26 +113,48 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: "#333333",
-    marginBottom: 8,
   },
-  emptySubtext: {
-    fontSize: 16,
-    color: "#666666",
-    textAlign: "center",
-  },
-  pokemonItem: {
+  listContainer: {
     padding: 16,
+    paddingBottom: 32,
+  },
+  pokemonCard: {
     backgroundColor: "#FFFFFF",
-    marginVertical: 0,
-    marginHorizontal: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-    flexDirection: "row",
-    justifyContent: "space-between",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pokemonImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 12,
   },
   pokemonName: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: "600",
     color: "#000000",
+    marginBottom: 12,
+  },
+  removeButton: {
+    backgroundColor: "#FF0000",
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: "100%",
+    alignItems: "center",
+  },
+  removeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

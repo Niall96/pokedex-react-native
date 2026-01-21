@@ -2,16 +2,8 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ListFilter, ChevronRight } from "lucide-react-native";
 import { typeColors } from "../utils/TypeColor";
-import {
-  Alert,
-  FlatList,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import { fetchTypes as fetchTypesApi, fetchPokemonByType as fetchPokemonByTypeApi } from "../api/typesApi";
+import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 
 
 export default function Index() {
@@ -35,7 +27,22 @@ export default function Index() {
       }
       const data = await res.json();
 
-      setPokemon((prevPokemon) => [...prevPokemon, ...data.results]);
+      const pokemonWithIds = data.results.map((item: any) => ({
+        ...item,
+        id: item.id,
+      }));
+
+      setPokemon((prevPokemon) => {
+        const combined = [...prevPokemon, ...pokemonWithIds];
+        const seen = new Set<string>();
+        return combined.filter((p) => {
+          const key = p?.id ?? p?.url ?? p?.name;
+          if (!key) return true;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
 
       if (data.results.length < 20 || !data.next) {
         setNextUrl(null);
@@ -52,14 +59,7 @@ export default function Index() {
 
   const fetchTypes = useCallback(async () => {
     try {
-      const res = await fetch("https://pokeapi.co/api/v2/type");
-      if (!res.ok) {
-        throw new Error("Failed to fetch types");
-      }
-      const data = await res.json();
-      const validTypes = data.results.filter(
-        (type: any) => type.name !== "unknown" && type.name !== "shadow"
-      );
+      const validTypes = await fetchTypesApi();
       setTypes(validTypes);
     } catch (error) {
       console.error("Error fetching types:", error);
@@ -70,15 +70,10 @@ export default function Index() {
   const fetchPokemonByType = useCallback(async (typeName: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`https://pokeapi.co/api/v2/type/${typeName}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch Pokemon by type");
-      }
-      const data = await res.json();
-      const pokemonList = data.pokemon.map((entry: any) => entry.pokemon);
+      const pokemonList = await fetchPokemonByTypeApi(typeName);
       setPokemon(pokemonList);
       setFilteredMode(true);
-      setNextUrl(null); 
+      setNextUrl(null);
     } catch (error) {
       console.error("Error fetching Pokemon by type:", error);
       Alert.alert("Oops", "Please try again");
@@ -101,7 +96,6 @@ export default function Index() {
 
   const handleTypeSelect = (typeName: string | null) => {
     if (typeName === null || selectedType === typeName) {
-      // Clear filter
       setSelectedType(null);
       setFilteredMode(false);
       setPokemon([]);
@@ -196,14 +190,13 @@ export default function Index() {
 
       <FlatList
         data={pokemon}
-        keyExtractor={(item, index) => item.url || index.toString()}
+        keyExtractor={(item) => item.id?.toString() ?? item.name}
         renderItem={({ item }) => {
-          const urlParts = item.url.split("/");
-          const id = urlParts[urlParts.length - 2];
-
           return (
             <TouchableOpacity
-              onPress={() => router.push(`/pokemon/${id}`)}
+              onPress={() => {
+                if (item.id) router.push(`/pokemon/${item.id}`);
+              }}
               style={styles.pokemonItem}
             >
               <Text style={styles.pokemonName}>
