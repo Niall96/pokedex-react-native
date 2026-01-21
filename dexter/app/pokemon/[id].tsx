@@ -1,16 +1,19 @@
 import { useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { typeColors } from "../utils/TypeColor";
 import * as Progress from 'react-native-progress';
 import { useFavorites } from "../context/FavoritesContext";
 import { Circle } from "lucide-react-native";
 import styles from "./styles";
+import formatStatName from "../utils/formatStatName";
 import { getPokemonById } from "../api/pokemonApi";
+
 
 export default function PokemonDetail() {
   const { id } = useLocalSearchParams();
   const navigation = useNavigation();
+  const { width: windowWidth } = useWindowDimensions();
   const [pokemonData, setPokemonData] = useState<any>(null);
   const { addFavorite, removeFavorite, isFavorite } = useFavorites();
   const [favorite, setFavorite] = useState(false);
@@ -58,6 +61,8 @@ export default function PokemonDetail() {
 
   if (!pokemonData) return null;
 
+  const progressBarWidth = Math.max(0, windowWidth - 16 * 2 - 8 * 2);
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollViewContainer}>
@@ -97,13 +102,13 @@ export default function PokemonDetail() {
                   style={styles.statView}
                 >
                   <Text style={{ fontSize: 16, flex: 1 }}>
-                    {s.stat.name.charAt(0).toUpperCase() + s.stat.name.slice(1)}
+                    {formatStatName(s.stat.name)}
                   </Text>
                   <Text style={{ fontSize: 16, fontWeight: "bold" }}>
                     {s.base_stat}
                   </Text>
                 </View>
-                <Progress.Bar progress={s.base_stat / 255} color="#000" width={350} />
+                <Progress.Bar progress={s.base_stat / 255} color="#000" width={progressBarWidth} />
               </View>
             ))}
           </View>

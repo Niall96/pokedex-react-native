@@ -1,13 +1,20 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ListFilter, ChevronRight } from "lucide-react-native";
 import { typeColors } from "../utils/TypeColor";
 import { fetchTypes as fetchTypesApi, fetchPokemonByType as fetchPokemonByTypeApi } from "../api/typesApi";
 import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { useFavorites } from "../context/FavoritesContext";
 
+const extractIdFromUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  const parts = url.split("/").filter(Boolean);
+  return parts[parts.length - 1];
+};
 
 export default function Index() {
   const router = useRouter();
+  const { isFavorite, loadFavorites } = useFavorites();
   const [pokemon, setPokemon] = useState<any[]>([]);
   const [nextUrl, setNextUrl] = useState<string | null>(
     "https://pokeapi.co/api/v2/pokemon/?limit=20"
@@ -29,7 +36,7 @@ export default function Index() {
 
       const pokemonWithIds = data.results.map((item: any) => ({
         ...item,
-        id: item.id,
+        id: item.id ?? extractIdFromUrl(item.url),
       }));
 
       setPokemon((prevPokemon) => {
@@ -87,6 +94,12 @@ export default function Index() {
     fetchPokemon(initialUrl);
     fetchTypes();
   }, [fetchPokemon, fetchTypes]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFavorites();
+    }, [loadFavorites])
+  );
 
   const loadMore = useCallback(() => {
     if (nextUrl && !loading && !filteredMode) {
@@ -153,35 +166,40 @@ export default function Index() {
                     All Types
                   </Text>
                 </TouchableOpacity>
-                {types.map((type) => {
-                  const isSelected = selectedType === type.name;
-                  const typeColor = typeColors[type.name] || "#A8A878";
-                  return (
-                    <TouchableOpacity
-                      key={type.name}
-                      onPress={() => handleTypeSelect(type.name)}
-                      style={[
-                        styles.filterOption,
-                        isSelected && styles.filterOptionSelected,
-                      ]}
-                    >
-                      <View
+                <FlatList
+                  data={types}
+                  keyExtractor={(type) => type.name}
+                  style={styles.filterList}
+                  showsVerticalScrollIndicator
+                  renderItem={({ item: type }) => {
+                    const isSelected = selectedType === type.name;
+                    const typeColor = typeColors[type.name] || "#A8A878";
+                    return (
+                      <TouchableOpacity
+                        onPress={() => handleTypeSelect(type.name)}
                         style={[
-                          styles.typeIndicator,
-                          { backgroundColor: typeColor },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.filterOptionText,
-                          isSelected && styles.filterOptionTextSelected,
+                          styles.filterOption,
+                          isSelected && styles.filterOptionSelected,
                         ]}
                       >
-                        {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <View
+                          style={[
+                            styles.typeIndicator,
+                            { backgroundColor: typeColor },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.filterOptionText,
+                            isSelected && styles.filterOptionTextSelected,
+                          ]}
+                        >
+                          {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
               </View>
             </TouchableWithoutFeedback>
           </View>
@@ -192,6 +210,8 @@ export default function Index() {
         data={pokemon}
         keyExtractor={(item) => item.id?.toString() ?? item.name}
         renderItem={({ item }) => {
+          const id = item.id?.toString();
+          const favorited = id ? isFavorite(id) : false;
           return (
             <TouchableOpacity
               onPress={() => {
@@ -202,7 +222,10 @@ export default function Index() {
               <Text style={styles.pokemonName}>
                 {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
               </Text>
-              <ChevronRight />
+              <View style={styles.rowRight}>
+                {favorited && <View style={styles.favoriteDot} />}
+                <ChevronRight />
+              </View>
             </TouchableOpacity>
           );
         }}
@@ -254,7 +277,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingVertical: 8,
-    minWidth: 200,
+    minWidth: 180,
+    maxHeight: 380,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -264,17 +288,20 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  filterList: {
+    maxHeight: 320,
+  },
   filterOption: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   filterOptionSelected: {
     backgroundColor: "#F0F0F0",
   },
   filterOptionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#333333",
     marginLeft: 8,
   },
@@ -282,9 +309,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   typeIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   pokemonItem: {
     padding: 16,
@@ -296,6 +323,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  rowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  favoriteDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FF0000",
   },
   pokemonName: {
     fontSize: 18,
